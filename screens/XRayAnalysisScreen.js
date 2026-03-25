@@ -9,6 +9,7 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Alert
 } from 'react-native';
 import { colors, radius, shadows } from '../theme';
 import { supabase } from '../services/supabase';
@@ -41,6 +42,7 @@ export default function XRayAnalysisScreen({ navigation, route }) {
   const [selectedTooth, setSelectedTooth] = useState('36');
   const [uploading, setUploading] = useState(false);
   const [currentImageUri, setCurrentImageUri] = useState(XRAY_IMG);
+  const [gender, setGender] = useState(null); // Gender state
 
   useEffect(() => {
     if (route.params?.imageUri) {
@@ -49,6 +51,12 @@ export default function XRayAnalysisScreen({ navigation, route }) {
   }, [route.params?.imageUri]);
 
   const handleProceed = async () => {
+    // Validation: Block calculation if gender is not selected
+    if (!gender) {
+      Alert.alert("Validation Error", "Gender must be selected before proceeding.");
+      return;
+    }
+
     if (route.params?.imageUri) {
       setUploading(true);
       try {
@@ -78,10 +86,10 @@ export default function XRayAnalysisScreen({ navigation, route }) {
         console.warn('Upload failed:', err);
       } finally {
         setUploading(false);
-        navigation?.navigate('StageClassification', { imageUri: route.params.imageUri });
+        navigation?.navigate('StageClassification', { imageUri: route.params.imageUri, gender });
       }
     } else {
-      navigation?.navigate('StageClassification');
+      navigation?.navigate('StageClassification', { gender });
     }
   };
 
@@ -222,6 +230,30 @@ export default function XRayAnalysisScreen({ navigation, route }) {
                 </Text>
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+
+        {/* ── Gender Selection ── */}
+        <View style={styles.infoCard}>
+          <View style={styles.detectedHeader}>
+            <Text style={styles.infoCardTitle}>Patient Gender</Text>
+            <View style={styles.detectedBadge}>
+              <Text style={styles.detectedBadgeText}>Required</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+            <TouchableOpacity 
+              style={[styles.toothTag, gender === 'Male' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              onPress={() => setGender('Male')}
+            >
+              <Text style={[styles.toothTagText, gender === 'Male' && { color: colors.white }]}>Male</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.toothTag, gender === 'Female' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              onPress={() => setGender('Female')}
+            >
+              <Text style={[styles.toothTagText, gender === 'Female' && { color: colors.white }]}>Female</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

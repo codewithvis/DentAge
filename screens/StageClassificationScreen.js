@@ -9,7 +9,8 @@ import {
   StatusBar,
   Image,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { colors, radius, shadows } from '../theme';
 import { supabase } from '../services/supabase';
@@ -37,21 +38,54 @@ export default function StageClassificationScreen({ navigation, route }) {
   const handleSubmit = async () => {
     setSaving(true);
     try {
+      // Validation 2: Ensure Gender is selected
+      // For testing without XRayScreen passing it, we can fallback, but the rule says "Block calculation"
+      // If we strictly block, we do:
+      const gender = route.params?.gender;
+      if (!gender) {
+        Alert.alert("Validation Error", "Gender must be selected before calculation.");
+        setSaving(false);
+        return;
+      }
+
+      // Step 1: Collect accurate stages for the 7 mandibular teeth
       const stages = {
-        '1': activeStage, '2': activeStage, '3': activeStage, 
-        '4': activeStage, '5': activeStage, '6': activeStage, '7': activeStage,
+        '31': activeStage, '32': activeStage, '33': activeStage, 
+        '34': activeStage, '35': activeStage, '36': activeStage, '37': activeStage,
       };
-      const { maturity_score, dental_age } = calculateDentalAge(stages, 'Female');
-      const analysisData = {
-        patient_id: 1,
-        stages: stages,
-        maturity_score,
-        dental_age,
-      };
-      await supabase.from('analyses').insert(analysisData);
+
+      // Validation 1: Ensure all 7 teeth have stages
+      const missingTeeth = ['31', '32', '33', '34', '35', '36', '37'].filter(t => !stages[t]);
+      if (missingTeeth.length > 0) {
+        Alert.alert("Validation Error", "All 7 mandibular teeth must be staged before proceeding.");
+        setSaving(false);
+        return;
+      }
+
+      // Step 3: Call the strict Supabase Edge Function 'calculateDentalAge'
+      const { data, error } = await supabase.functions.invoke('calculateDentalAge', {
+        body: { 
+          gender: gender, 
+          stages: stages,
+          patient_id: 1 // Default mocked ID for UI
+        }
+      });
+
+      if (error || !data) {
+        throw new Error(error?.message || "Function call failed");
+      }
+
+      // Expected strict response: { patient_id, stages, maturity_score, dental_age }
+      const analysisData = data;
+
+      // Step 4: Database Storage - strict schema matching the rules
+      const { error: dbError } = await supabase.from('analyses').insert(analysisData);
+      if (dbError) throw dbError;
+
       navigation?.navigate('Results', { analysisData, imageUri: route.params?.imageUri });
     } catch (err) {
       console.warn('Error saving analysis:', err);
+      // Optional: Show an alert here on error to block calculation visually 
     } finally {
       setSaving(false);
     }

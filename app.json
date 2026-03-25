@@ -4,8 +4,7 @@
     "slug": "opg-age-detector",
     "version": "1.0.0",
     "plugins": [
-      "expo-sharing",
-      "expo-network"
+      "expo-sharing"
     ],
     "android": {
       "permissions": [
