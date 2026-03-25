@@ -3,13 +3,17 @@
     "name": "OPG Age Detector",
     "slug": "opg-age-detector",
     "version": "1.0.0",
+    "icon": "./assets/icons/app-icon.png",
+    "splash": {
+      "image": "./assets/icons/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "plugins": [
       "expo-sharing"
     ],
     "android": {
-      "permissions": [
-        "android.permission.INTERNET"
-      ]
+      "permissions": []
     }
   }
 }

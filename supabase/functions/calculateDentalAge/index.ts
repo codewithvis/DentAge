@@ -1,5 +1,6 @@
 // supabase/functions/calculateDentalAge/index.ts
 
+// @ts-ignore: Deno imports are not natively recognized by the project's tsconfig
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const corsHeaders = {
