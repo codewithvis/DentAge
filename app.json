@@ -10,7 +10,8 @@
       "backgroundColor": "#ffffff"
     },
     "plugins": [
-      "expo-sharing"
+      "expo-sharing",
+      "expo-notifications"
     ],
     "android": {
       "permissions": []

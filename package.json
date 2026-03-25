@@ -2,7 +2,7 @@
   "name": "opg-age-detector",
   "version": "1.0.0",
   "description": "A clinical dental age estimation app built in React Native, faithfully translated from the Figma design.",
-  "main": "App.js",
+  "main": "index.ts",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
