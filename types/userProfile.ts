@@ -1,7 +1,7 @@
 export type UserProfile = {
   id: string;
   created_at: string;
-  first_name: string;
-  last_name: string;
+  full_name: string;
+  dental_license_student_id: string;
   email_id: string;
 };
