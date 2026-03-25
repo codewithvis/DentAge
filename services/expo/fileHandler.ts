@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { moveAsync, documentDirectory, cacheDirectory } from 'expo-file-system';
 import * as Print from 'expo-print';
 
 /**
@@ -8,12 +8,11 @@ export const generatePDFReport = async (htmlContent: string): Promise<string> =>
   try {
     const { uri } = await Print.printToFileAsync({ html: htmlContent });
     
-    // Move to a more permanent document directory if needed, or return the temp uri
     const fileName = `OPG_Age_Report_${Date.now()}.pdf`;
-    const destDir = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
+    const destDir = documentDirectory || cacheDirectory || '';
     const newPath = destDir + fileName;
     
-    await FileSystem.moveAsync({
+    await moveAsync({
       from: uri,
       to: newPath
     });
@@ -24,3 +23,4 @@ export const generatePDFReport = async (htmlContent: string): Promise<string> =>
     throw error;
   }
 };
+
