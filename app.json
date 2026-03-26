@@ -14,7 +14,8 @@
       "expo-notifications"
     ],
     "android": {
-      "permissions": []
+      "permissions": [],
+      "package": "com.anonymous.opgagedetector"
     }
   }
 }
