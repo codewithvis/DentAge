@@ -16,6 +16,7 @@ export const useProfile = (userId: string | null | undefined) => {
       if (error) throw new Error(error.message);
       return data;
     },
-    enabled: !!userId, 
+    enabled: !!userId, retry: 1,
+    staleTime: 1000 * 60 * 5,
   });
 };

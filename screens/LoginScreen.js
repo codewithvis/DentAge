@@ -38,12 +38,13 @@ export default function LoginScreen({ navigation }) {
     }
     setLoading(true);
     setErrorMsg('');
+    console.log(email + " " + password);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     setLoading(false);
-    
+    console.log(error);
     if (error) {
       setErrorMsg(error.message);
     } else {

@@ -47,19 +47,19 @@ export default function App() {
     <AuthProvider>
       <QueryProvider>
         <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Login"
-        screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
-      >
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="XRayAnalysis" component={XRayAnalysisScreen} />
-        <Stack.Screen name="StageClassification" component={StageClassificationScreen} />
-        <Stack.Screen name="Results" component={ResultsDashboardScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+          <Stack.Navigator
+            initialRouteName="Login"
+            screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+          >
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} />
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="XRayAnalysis" component={XRayAnalysisScreen} />
+            <Stack.Screen name="StageClassification" component={StageClassificationScreen} />
+            <Stack.Screen name="Results" component={ResultsDashboardScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
       </QueryProvider>
     </AuthProvider>
   );

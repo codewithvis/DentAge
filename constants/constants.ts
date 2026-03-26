@@ -1,1 +1,2 @@
-export const DEFAULT_PROFILE_PHOTO = "https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg";
+export const DEFAULT_PROFILE_PHOTO_URL = "https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg";
+export const DEFAULT_PROFILE_PHOTO = require("../assets/images/default_profile_photo.jpg");

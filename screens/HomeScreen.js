@@ -72,7 +72,6 @@ export default function HomeScreen({ navigation }) {
   const {data: profile, error : profileError} = useProfile(session?.user?.id);
 
   console.log("the user is here" , profile);
-  console.log("the eror is ", profileError);
 
   const handleUploadAndAnalyze = async () => {
     try {
@@ -95,7 +94,8 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
           <View style={styles.profileBorder}>
-            <Image source={{ uri: profile.profile_photo_url || DEFAULT_PROFILE_PHOTO }} style={styles.profilePic} />
+            <Image source={ profile?.profile_photo_url ? { uri: profile.profile_photo_url } 
+      : DEFAULT_PROFILE_PHOTO } style={styles.profilePic} />
           </View>
         </View>
         <TouchableOpacity style={styles.settingsBtn}>
