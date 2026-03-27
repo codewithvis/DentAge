@@ -203,7 +203,7 @@ export const AVATAR_BORDER_WIDTH = scale(2);
 // ─────────────────────────────────────────────────
 // INPUT FIELD SIZES
 // ─────────────────────────────────────────────────
-export const INPUT_HEIGHT = scale(56);
+//export const INPUT_HEIGHT = scale(56);
 export const INPUT_FONT_SIZE = getResponsiveFontSize(16);
 export const INPUT_ICON_SIZE = scale(18);
 
