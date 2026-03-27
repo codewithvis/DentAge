@@ -12,6 +12,7 @@ import {
   Linking,
 } from 'react-native';
 import { colors, radius, shadows } from '../theme';
+import {supabase } from '../services/supabase';
 
 const PROFILE_IMG = 'https://www.figma.com/api/mcp/asset/c0ea0520-82ae-49f1-b629-baa5bff5e830';
 
@@ -186,7 +187,18 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.logoutSection}>
           <TouchableOpacity
             style={styles.logoutBtn}
-            onPress={() => navigation?.navigate('Login')}
+            onPress={ async() => {
+              const { error } = await supabase.auth.signOut()
+              if (error) {
+                Alert.alert("Failed to sign out");
+              }
+              else {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "Login" }],
+                });
+              }
+            }}
             activeOpacity={0.8}
           >
             <Text style={styles.logoutIcon}>→</Text>
