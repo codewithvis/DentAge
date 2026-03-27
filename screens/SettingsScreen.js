@@ -214,6 +214,24 @@ export default function SettingsScreen({ navigation }) {
 
             <View style={styles.divider} /> */}
 
+            <TouchableOpacity onPress={() => {
+              navigation.navigate('ForgotPasswordScreen');
+            }}> 
+              <View style={styles.linkRow}>
+              <View style={styles.toggleLeft}>
+                <View style={[styles.toggleIcon, { backgroundColor: '#f0fdf4' }]}>
+                  <Text style={styles.toggleIconText}>🔑</Text>
+                </View>
+                <View style={styles.toggleTexts}>
+                  <Text style={styles.toggleTitle}>Forgot password</Text>
+                  <Text style={styles.toggleSub}>Change password if you forgot it</Text>
+                </View>
+              </View>
+            </View>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
             <View style={styles.linkRow}>
               <View style={styles.toggleLeft}>
                 <View style={[styles.toggleIcon, { backgroundColor: '#f0fdf4' }]}>

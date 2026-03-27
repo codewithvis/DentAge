@@ -15,6 +15,21 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Linking, Button } from 'react-native';
+
+const openWebsite = async () => {
+  const url = 'https://reactnative.dev';
+  // Check if the device can open the URL
+  const supported = await Linking.canOpenURL(url);
+
+  if (supported) {
+    await Linking.openURL(url);
+  } else {
+    console.error(`Don't know how to open this URL: ${url}`);
+  }
+};
+// ... in your component render
+<Button title="Visit React Native Docs" onPress={openWebsite} />
 
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
