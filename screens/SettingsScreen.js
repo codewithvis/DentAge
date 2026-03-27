@@ -7,12 +7,15 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  Image,
+  Image, Alert,
   Switch,
   Linking,
 } from 'react-native';
 import { colors, radius, shadows } from '../theme';
-import {supabase } from '../services/supabase';
+import { supabase } from '../services/supabase';
+import { useAuth } from '../provider/AuthProvider';
+import { useProfile } from '../api/profile';
+import { DEFAULT_PROFILE_PHOTO } from '../constants/constants';
 
 const PROFILE_IMG = 'https://www.figma.com/api/mcp/asset/c0ea0520-82ae-49f1-b629-baa5bff5e830';
 
@@ -55,6 +58,13 @@ export default function SettingsScreen({ navigation }) {
   const [notifications, setNotifications] = useState(true);
   const [method, setMethod] = useState('Demirjian');
 
+  const { session, loading: sessionLoading } = useAuth();
+  const { data: profile, error: profileError, loading: profileLoading } = useProfile(session?.user?.id);
+
+  if (profileLoading || sessionLoading) {
+    return <ActivityIndicator size="large" />;
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.bgScreen} />
@@ -80,10 +90,11 @@ export default function SettingsScreen({ navigation }) {
         {/* ── Profile Bento ── */}
         <View style={styles.profileCard}>
           <View style={styles.profileAvatar}>
-            <Image source={{ uri: PROFILE_IMG }} style={styles.profileImg} />
+            <Image source={ profile?.profile_photo_url ? { uri: profile.profile_photo_url } 
+                  : DEFAULT_PROFILE_PHOTO } style={styles.profileImg} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Dr. Aris</Text>
+            <Text style={styles.profileName}>{profile?.full_name}</Text>
             <Text style={styles.profileRole}>Oral & Maxillofacial Radiologist</Text>
             <View style={styles.profileBadge}>
               <Text style={styles.profileBadgeText}>License Verified</Text>
@@ -187,7 +198,7 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.logoutSection}>
           <TouchableOpacity
             style={styles.logoutBtn}
-            onPress={ async() => {
+            onPress={async () => {
               const { error } = await supabase.auth.signOut()
               if (error) {
                 Alert.alert("Failed to sign out");
