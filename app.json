@@ -1,5 +1,6 @@
 {
   "expo": {
+    "scheme": "app",
     "name": "DentAge",
     "slug": "dentage",
     "version": "1.0.0",
