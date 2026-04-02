@@ -75,6 +75,7 @@ export const syncOfflineData = async () => {
                     .from('radiographs')
                     .upload(fileName, blob, {
                         contentType: `image/${fileExt}`,
+                        upsert: true,
                     });
                 if (uploadError) {
                     console.error('Offline upload: supabase storage error', uploadError);
