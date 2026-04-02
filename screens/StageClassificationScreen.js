@@ -5,16 +5,16 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Image,
   FlatList,
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows } from '../theme';
-import { supabase } from '../services/supabase';
-import { calculateDentalAge } from '../utils/scoring';
+import { supabase, enqueueOfflineAction, syncOfflineData } from '../services/supabase';
+// Note: Using direct database insertion instead of edge function for now
 
 const STAGES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
@@ -29,7 +29,7 @@ const STAGE_DESCRIPTIONS = {
   H: 'Root complete, apex open',
 };
 
-const XRAY_IMG = 'https://www.figma.com/api/mcp/asset/c494860f-8dca-4cf4-bba5-56f6cc881bac';
+const XRAY_IMG = require('../assets/images/placeholder.png');
 
 import { scale } from '../utils/responsive';
 import {
@@ -42,60 +42,73 @@ import {
 } from '../constants/layout';
 
 export default function StageClassificationScreen({ navigation, route }) {
-  const [activeStage, setActiveStage] = useState('E');
+  const aiData = route.params?.aiData;
   const [saving, setSaving] = useState(false);
+  const [retryError, setRetryError] = useState(null);
+  const [showRetry, setShowRetry] = useState(false);
 
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      // Validation 2: Ensure Gender is selected
-      // For testing without XRayScreen passing it, we can fallback, but the rule says "Block calculation"
-      // If we strictly block, we do:
-      const gender = route.params?.gender;
-      if (!gender) {
-        Alert.alert("Validation Error", "Gender must be selected before calculation.");
+      // Validation: Ensure AI data is available
+      const aiData = route.params?.aiData;
+      if (!aiData) {
+        Alert.alert("Validation Error", "AI analysis data is missing. Please go back and complete the analysis.");
         setSaving(false);
         return;
       }
 
-      // Step 1: Collect accurate stages for the 7 mandibular teeth
-      const stages = {
-        '31': activeStage, '32': activeStage, '33': activeStage, 
-        '34': activeStage, '35': activeStage, '36': activeStage, '37': activeStage,
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert("Authentication Error", "You must be logged in to save analysis results.");
+        setSaving(false);
+        return;
+      }
+
+      // Step 3: Prepare data for saving to database
+      const analysisData = {
+        case_id: `CASE-${Date.now()}`,
+        patient_id: 1, // TODO: Get from patient selection
+        image_url: route.params?.imageUri,
+        dental_age: aiData.estimated_age,
+        ai_confidence: aiData.confidence,
+        maturity_score: Math.min(100, Math.max(0, (aiData.estimated_age / 18) * 100)),
+        age_range: aiData.age_range,
+        tooth_development_stage: aiData.tooth_development_stage,
+        analysis: aiData.analysis
       };
 
-      // Validation 1: Ensure all 7 teeth have stages
-      const missingTeeth = ['31', '32', '33', '34', '35', '36', '37'].filter(t => !stages[t]);
-      if (missingTeeth.length > 0) {
-        Alert.alert("Validation Error", "All 7 mandibular teeth must be staged before proceeding.");
-        setSaving(false);
-        return;
+      // Add user_id to the analysis data for RLS
+      const analysisWithUser = {
+        ...analysisData,
+        user_id: user.id
+      };
+
+      // Step 4: Database Storage - save to analyses table
+      const { error: dbError } = await supabase.from('analyses').insert(analysisWithUser);
+      if (dbError) {
+        console.warn('analyses insert error', dbError);
+        throw dbError;
       }
 
-      // Step 3: Call the strict Supabase Edge Function 'calculateDentalAge'
-      const { data, error } = await supabase.functions.invoke('calculateDentalAge', {
-        body: { 
-          gender: gender, 
-          stages: stages,
-          patient_id: 1 // Default mocked ID for UI
-        }
-      });
-
-      if (error || !data) {
-        throw new Error(error?.message || "Function call failed");
-      }
-
-      // Expected strict response: { patient_id, stages, maturity_score, dental_age }
-      const analysisData = data;
-
-      // Step 4: Database Storage - strict schema matching the rules
-      const { error: dbError } = await supabase.from('analyses').insert(analysisData);
-      if (dbError) throw dbError;
-
+      setRetryError(null);
+      setShowRetry(false);
       navigation?.navigate('Results', { analysisData, imageUri: route.params?.imageUri });
     } catch (err) {
       console.warn('Error saving analysis:', err);
-      // Optional: Show an alert here on error to block calculation visually 
+      setRetryError(err?.message || 'Unable to save analysis results.');
+      setShowRetry(true);
+
+      // Queue offline action with new structure
+      await enqueueOfflineAction({
+        type: 'saveAnalysis',
+        payload: {
+          analysisData: analysisWithUser,
+        },
+      });
+
+      Alert.alert('Analysis failed', err?.message || 'Unable to save analysis results. It has been queued for sync.');
     } finally {
       setSaving(false);
     }
@@ -115,13 +128,13 @@ export default function StageClassificationScreen({ navigation, route }) {
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <View style={styles.headerTitles}>
-            <Text style={styles.headerTitle}>Stage{'\n'}Classification</Text>
-            <Text style={styles.headerSub}>Tooth 36 · Mandibular Left</Text>
+            <Text style={styles.headerTitle}>Analysis{'\n'}Review</Text>
+            <Text style={styles.headerSub}>AI-powered dental assessment</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.helpBtn}>
-          <Text style={styles.helpIcon}>✦</Text>
-          <Text style={styles.helpText}>Nolla{'\n'}Scale</Text>
+          <Text style={styles.helpIcon}>🤖</Text>
+          <Text style={styles.helpText}>AI{'\n'}Analysis</Text>
         </TouchableOpacity>
       </View>
 
@@ -134,7 +147,7 @@ export default function StageClassificationScreen({ navigation, route }) {
         <View style={styles.diagnosticCard}>
           {/* X-Ray Preview */}
           <View style={styles.xrayPreview}>
-            <Image source={{ uri: XRAY_IMG }} style={styles.xrayImg} />
+            <Image source={XRAY_IMG} style={styles.xrayImg} />
             <View style={styles.xrayGradient} />
             <View style={styles.xrayLabel}>
               <Text style={styles.xrayLabelText}>Tooth 36 · Distal View</Text>
@@ -148,7 +161,9 @@ export default function StageClassificationScreen({ navigation, route }) {
               <Text style={styles.aiTitle}>AI Insights</Text>
             </View>
 
-            <Text style={styles.stageResult}>Stage {activeStage}</Text>
+            <Text style={styles.stageResult}>
+              {aiData ? aiData.tooth_development_stage : 'Analysis Pending'}
+            </Text>
 
             {/* Confidence Box */}
             <View style={styles.confidenceBox}>
@@ -159,10 +174,12 @@ export default function StageClassificationScreen({ navigation, route }) {
               </Text>
               <View style={styles.confidenceRow}>
                 <Text style={styles.confidenceLabel}>AI Confidence</Text>
-                <Text style={styles.confidenceValue}>96%</Text>
+                <Text style={styles.confidenceValue}>
+                  {aiData ? Math.round(aiData.confidence * 100) : 'N/A'}%
+                </Text>
               </View>
               <View style={styles.progressBg}>
-                <View style={[styles.progressFill, { width: '96%' }]} />
+                <View style={[styles.progressFill, { width: aiData ? `${aiData.confidence * 100}%` : '0%' }]} />
               </View>
             </View>
 
@@ -176,84 +193,127 @@ export default function StageClassificationScreen({ navigation, route }) {
               {saving ? <ActivityIndicator color={colors.white} /> : (
                 <>
                   <Text style={styles.confirmBtnIcon}>✓</Text>
-                  <Text style={styles.confirmBtnText}>Confirm Stage {activeStage}</Text>
+                  <Text style={styles.confirmBtnText}>
+                    Confirm Analysis: {aiData ? `${aiData.estimated_age} years` : 'Pending'}
+                  </Text>
                 </>
               )}
+            </TouchableOpacity>
+
+            {showRetry && (
+              <TouchableOpacity
+                style={styles.retryBtn}
+                activeOpacity={0.85}
+                onPress={handleSubmit}
+                disabled={saving}
+              >
+                <Text style={styles.retryBtnText}>Retry Saving Analysis</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.syncBtn}
+              activeOpacity={0.85}
+              onPress={async () => {
+                setSaving(true);
+                try {
+                  await syncOfflineData();
+                  Alert.alert('Sync completed', 'Offline queue has been processed.');
+                  setShowRetry(false);
+                  setRetryError(null);
+                } catch (e) {
+                  console.warn('Sync offline data failed:', e);
+                  Alert.alert('Sync error', 'Unable to sync offline data. Please try again later.');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+            >
+              <Text style={styles.syncBtnText}>{saving ? 'Syncing...' : 'Sync Offline Queue'}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Reference Guide Section ── */}
-        <View style={styles.referenceSection}>
-          <View style={styles.refHeader}>
+        {/* ── AI Analysis Results ── */}
+        <View style={styles.analysisSection}>
+          <View style={styles.analysisHeader}>
             <View>
-              <Text style={styles.refTitle}>Demirjian{'\n'}Stage Guide</Text>
-              <Text style={styles.refSub}>
-                Select a stage to compare with current radiograph
+              <Text style={styles.analysisTitle}>AI Analysis{'\n'}Results</Text>
+              <Text style={styles.analysisSub}>
+                Comprehensive dental development assessment
               </Text>
             </View>
-            <View style={styles.refNav}>
-              <TouchableOpacity style={styles.refNavBtn}>
-                <Text style={styles.refNavArrow}>‹</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.refNavBtn}>
-                <Text style={styles.refNavArrow}>›</Text>
-              </TouchableOpacity>
+            <View style={styles.analysisConfidence}>
+              <Text style={styles.confidenceLabel}>Confidence</Text>
+              <Text style={styles.confidenceValue}>
+                {aiData ? Math.round(aiData.confidence * 100) : 0}%
+              </Text>
             </View>
           </View>
 
-          {/* Horizontal Stage Cards */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.stageCardsRow}
-          >
-            {STAGES.map((stage) => {
-              const isActive = stage === activeStage;
-              return (
-                <TouchableOpacity
-                  key={stage}
-                  style={[styles.stageCard, isActive && styles.stageCardActive]}
-                  onPress={() => setActiveStage(stage)}
-                  activeOpacity={0.8}
-                >
-                  {isActive && (
-                    <View style={styles.stageActiveBadge}>
-                      <Text style={styles.stageActiveBadgeText}>Current</Text>
-                    </View>
-                  )}
-                  <View style={[styles.stageImageBox, isActive && styles.stageImageBoxActive]}>
-                    <Text style={styles.stageEmoji}>
-                      {stage <= 'C' ? '🦷' : stage <= 'F' ? '🦷' : '🦷'}
-                    </Text>
-                    <Text style={[styles.stageLetter, isActive && styles.stageLetterActive]}>
-                      {stage}
-                    </Text>
-                  </View>
-                  <Text style={[styles.stageCardTitle, isActive && styles.stageCardTitleActive]}>
-                    Stage {stage}
+           {aiData && (
+             <>
+                {/* Estimated Age */}
+                <View style={styles.ageResult}>
+                  <Text style={styles.ageLabel}>Estimated Dental Age</Text>
+                  <Text style={styles.ageValue}>{aiData.estimated_age || 'N/A'} years</Text>
+                  <Text style={styles.ageRange}>
+                    Age Range: {aiData.age_range || 'N/A'}
                   </Text>
-                  <Text style={[styles.stageCardDesc, isActive && styles.stageCardDescActive]}>
-                    {STAGE_DESCRIPTIONS[stage]}
+                  <Text style={styles.methodText}>
+                    Development Stage: {aiData.tooth_development_stage || 'N/A'}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                </View>
+
+                {/* Analysis Details */}
+                <View style={styles.analysisDetails}>
+                  <Text style={styles.detailsTitle}>AI Analysis Summary</Text>
+                  <Text style={styles.detailsValue}>
+                    {aiData.analysis || 'Analysis not available'}
+                  </Text>
+
+                  <Text style={styles.detailsTitle}>Development Stage</Text>
+                  <Text style={styles.detailsValue}>
+                    {aiData.tooth_development_stage || 'Not available'}
+                  </Text>
+
+                  <Text style={styles.detailsTitle}>Confidence Level</Text>
+                  <Text style={styles.detailsValue}>
+                    {aiData ? `${Math.round(aiData.confidence * 100)}% confidence in assessment` : 'N/A'}
+                  </Text>
+
+                  <Text style={styles.detailsTitle}>Methodology</Text>
+                  <Text style={styles.detailsValue}>
+                    Gemini AI analysis of full OPG radiograph using Demirjian classification criteria
+                  </Text>
+                </View>
+             </>
+           )}
+
+          {!aiData && (
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No AI analysis data available</Text>
+              <Text style={styles.noDataSubtext}>
+                Please go back and complete the radiograph analysis
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* ── Secondary Actions ── */}
-        <View style={styles.secondaryActions}>
-          <TouchableOpacity style={styles.outlineBtn}>
-            <Text style={styles.outlineBtnIcon}>📋</Text>
-            <Text style={styles.outlineBtnText}>Add Manual Classification Note</Text>
-          </TouchableOpacity>
+        {/* ── Primary Action ── */}
+        <View style={styles.primaryAction}>
           <TouchableOpacity
-            style={styles.solidBtn}
+            style={styles.generateReportBtn}
             onPress={handleSubmit}
             disabled={saving}
           >
-            {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.solidBtnText}>Generate Age Report</Text>}
+            {saving ? <ActivityIndicator color={colors.white} /> : (
+              <>
+                <Text style={styles.generateReportIcon}>📊</Text>
+                <Text style={styles.generateReportText}>Generate Dental Age Report</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -264,11 +324,13 @@ export default function StageClassificationScreen({ navigation, route }) {
       <View style={styles.floatingBar}>
         <View style={styles.floatingBarLeft}>
           <View style={styles.floatingIcon}>
-            <Text style={styles.floatingIconEmoji}>🦷</Text>
+            <Text style={styles.floatingIconEmoji}>🤖</Text>
           </View>
           <View>
-            <Text style={styles.floatingLabel}>Tooth</Text>
-            <Text style={styles.floatingValue}>36</Text>
+            <Text style={styles.floatingLabel}>AI Analysis</Text>
+            <Text style={styles.floatingValue}>
+              {aiData ? `${aiData.estimatedAge?.confidence || 0}%` : 'N/A'}
+            </Text>
           </View>
         </View>
         <TouchableOpacity
@@ -276,7 +338,7 @@ export default function StageClassificationScreen({ navigation, route }) {
           onPress={handleSubmit}
           disabled={saving}
         >
-          {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.floatingBtnText}>Submit{'\n'}Stage</Text>}
+          {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.floatingBtnText}>Generate{'\n'}Report</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -416,6 +478,32 @@ const styles = StyleSheet.create({
   },
   confirmBtnIcon: { fontSize: scale(16), color: colors.white },
   confirmBtnText: { fontSize: FONT_SIZES.lg, fontWeight: '700', color: colors.white },
+  retryBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.red,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    ...shadows.button,
+  },
+  retryBtnText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  syncBtn: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.indigo,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    ...shadows.button,
+  },
+  syncBtnText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: colors.white,
+  },
 
   // Reference Section
   referenceSection: { marginBottom: spacing.xxl },
@@ -579,5 +667,147 @@ const styles = StyleSheet.create({
     color: colors.white,
     textAlign: 'center',
     lineHeight: scale(20),
+  },
+
+  // AI Analysis Section
+  analysisSection: {
+    backgroundColor: colors.bgCard,
+    borderRadius: borderRadius.lg,
+    padding: padding.section,
+    marginBottom: gaps.lg,
+    ...shadows.card,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: gaps.lg,
+  },
+  analysisTitle: {
+    fontSize: FONT_SIZES.xxl,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    lineHeight: scale(28),
+  },
+  analysisSub: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  analysisConfidence: {
+    alignItems: 'center',
+    backgroundColor: colors.primaryExtraLight,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  confidenceLabel: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  confidenceValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+
+  // Age Result
+  ageResult: {
+    backgroundColor: colors.bgMuted,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: gaps.lg,
+    alignItems: 'center',
+  },
+  ageLabel: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  ageValue: {
+    fontSize: FONT_SIZES.huge,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
+  ageRange: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  methodText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '400',
+    color: colors.textMuted,
+  },
+
+  // Analysis Details
+  analysisDetails: {
+    gap: gaps.md,
+  },
+  detailsTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  detailsValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '400',
+    color: colors.textPrimary,
+    lineHeight: scale(20),
+  },
+  findingItem: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '400',
+    color: colors.textPrimary,
+    marginLeft: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+
+  // No Data State
+  noDataContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  noDataText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  noDataSubtext: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '400',
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+
+  // Primary Action
+  primaryAction: {
+    marginBottom: gaps.lg,
+  },
+  generateReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.card,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    gap: gaps.sm,
+    ...shadows.button,
+  },
+  generateReportIcon: {
+    fontSize: FONT_SIZES.lg,
+  },
+  generateReportText: {
+    fontSize: FONT_SIZES.base,
+    fontWeight: '700',
+    color: colors.white,
   },
 });

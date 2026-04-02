@@ -15,21 +15,10 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Linking, Button } from 'react-native';
-
-const openWebsite = async () => {
-  const url = 'https://reactnative.dev';
-  // Check if the device can open the URL
-  const supported = await Linking.canOpenURL(url);
-
-  if (supported) {
-    await Linking.openURL(url);
-  } else {
-    console.error(`Don't know how to open this URL: ${url}`);
-  }
-};
-// ... in your component render
-<Button title="Visit React Native Docs" onPress={openWebsite} />
+import { Linking } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
+import { supabase } from './services/supabase';
 
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
@@ -107,26 +96,29 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <QueryProvider>
-        <NavigationContainer linking={linking}>
-          <Stack.Navigator
-            initialRouteName="Login"
-            screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
-          >
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="ChangePasswordScreen" component={ChangePasswordScreen} />
-            <Stack.Screen name="DeleteAccountScreen" component={DeleteAccountScreen} />
-            <Stack.Screen name="ForgotPasswordScreen" component={ForgotPasswordScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="XRayAnalysis" component={XRayAnalysisScreen} />
-            <Stack.Screen name="StageClassification" component={StageClassificationScreen} />
-            <Stack.Screen name="Results" component={ResultsDashboardScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </QueryProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <QueryProvider>
+          <NavigationContainer linking={linking}>
+            <Stack.Navigator
+              initialRouteName="Login"
+              screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+            >
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="ChangePasswordScreen" component={ChangePasswordScreen} />
+              <Stack.Screen name="DeleteAccountScreen" component={DeleteAccountScreen} />
+              <Stack.Screen name="ForgotPasswordScreen" component={ForgotPasswordScreen} />
+              <Stack.Screen name="SignUp" component={SignUpScreen} />
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="XRayAnalysis" component={XRayAnalysisScreen} />
+              <Stack.Screen name="StageClassification" component={StageClassificationScreen} />
+              <Stack.Screen name="Results" component={ResultsDashboardScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+          <Toast />
+        </QueryProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

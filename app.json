@@ -1,9 +1,10 @@
 {
   "expo": {
-    "scheme": "app",
+    "scheme": "dentage",
     "name": "DentAge",
     "slug": "dentage",
     "version": "1.0.0",
+    "orientation": "portrait",
     "icon": "./assets/icons/app-icon.png",
     "splash": {
       "image": "./assets/icons/splash-icon.png",
@@ -16,7 +17,27 @@
     ],
     "android": {
       "permissions": [],
-      "package": "com.anonymous.dentage"
-    }
+      "package": "com.anonymous.dentage",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons/app-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/icons/app-icon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f2d09779-e0ed-4188-9a7f-055f60de2000"
+      }
+    },
+    "owner": "helpdeskomr",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f2d09779-e0ed-4188-9a7f-055f60de2000"
+    },
+    "ios": {}
   }
 }

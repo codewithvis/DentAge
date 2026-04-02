@@ -5,16 +5,18 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Image,
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows } from '../theme';
-import { supabase } from '../services/supabase';
+import { supabase, enqueueOfflineAction } from '../services/supabase';
+import * as FileSystem from 'expo-file-system/legacy';
+import { analyzeOPG } from '../api/analyze';
 
-const XRAY_IMG = 'https://www.figma.com/api/mcp/asset/c494860f-8dca-4cf4-bba5-56f6cc881bac';
+const XRAY_IMG = require('../assets/images/placeholder.png');
 const SHARE_ICON = 'https://www.figma.com/api/mcp/asset/61719cfc-29ee-4e38-a422-1c5d6a967389';
 
 import { scale } from '../utils/responsive';
@@ -54,7 +56,7 @@ export default function XRayAnalysisScreen({ navigation, route }) {
   const [selectedTooth, setSelectedTooth] = useState('36');
   const [uploading, setUploading] = useState(false);
   const [currentImageUri, setCurrentImageUri] = useState(XRAY_IMG);
-  const [gender, setGender] = useState(null); // Gender state
+  const [aiData, setAiData] = useState(null);
 
   useEffect(() => {
     if (route.params?.imageUri) {
@@ -63,45 +65,45 @@ export default function XRayAnalysisScreen({ navigation, route }) {
   }, [route.params?.imageUri]);
 
   const handleProceed = async () => {
-    // Validation: Block calculation if gender is not selected
-    if (!gender) {
-      Alert.alert("Validation Error", "Gender must be selected before proceeding.");
+    if (!route.params?.imageUri) {
+      Alert.alert("Error", "No image selected for analysis.");
       return;
     }
 
-    if (route.params?.imageUri) {
-      setUploading(true);
+    setUploading(true);
+    let aiData = null;
+
+    try {
+      // Read image as base64 for Gemini API
+      let base64Image = '';
       try {
-        const fileExt = route.params.imageUri.split('.').pop() || 'jpg';
-        const fileName = `${Date.now()}.${fileExt}`;
-
-        // Using fetch to get the blob from uri, works cross platform in RN
-        const response = await fetch(route.params.imageUri);
-        const blob = await response.blob();
-
-        const { data, error } = await supabase.storage
-          .from('radiographs')
-          .upload(fileName, blob, {
-            contentType: `image/${fileExt}`,
-          });
-
-        if (!error) {
-           const { data: publicData } = supabase.storage.from('radiographs').getPublicUrl(fileName);
-           // Assume patient_id=1 for now, in prod fetch from context/state
-           await supabase.from('radiographs').insert({
-             patient_id: 1,
-             image_url: publicData.publicUrl,
-             uploaded_at: new Date().toISOString()
-           });
-        }
-      } catch (err) {
-        console.warn('Upload failed:', err);
-      } finally {
+        base64Image = await FileSystem.readAsStringAsync(route.params.imageUri, { encoding: 'base64' });
+      } catch(e) {
+        console.warn("Failed to read base64 for AI", e);
+        Alert.alert('Error', 'Unable to process the selected image.');
         setUploading(false);
-        navigation?.navigate('StageClassification', { imageUri: route.params.imageUri, gender });
+        return;
       }
-    } else {
-      navigation?.navigate('StageClassification', { gender });
+
+      // Call Gemini API for analysis
+      if (base64Image) {
+        aiData = await analyzeOPG(base64Image);
+        setAiData(aiData);
+        console.log("AI Analysis Successful:", aiData);
+      }
+
+    } catch (err) {
+      console.warn('Analysis failed:', err);
+      Alert.alert(
+        'Analysis Failed',
+        'Unable to analyze the radiograph. Please check your connection and try again.',
+        [{ text: 'Retry', onPress: () => handleProceed() }, { text: 'Cancel' }]
+      );
+    } finally {
+      setUploading(false);
+      if (aiData) {
+        navigation?.navigate('StageClassification', { imageUri: route.params.imageUri, aiData });
+      }
     }
   };
 
@@ -149,7 +151,7 @@ export default function XRayAnalysisScreen({ navigation, route }) {
 
         {/* ── Radiograph Viewport ── */}
         <View style={styles.viewport}>
-          <Image source={{ uri: currentImageUri }} style={styles.xrayImg} />
+          <Image source={typeof currentImageUri === 'string' ? { uri: currentImageUri } : currentImageUri} style={styles.xrayImg} />
 
           {/* AI Overlay Layer */}
           {overlayEnabled && (
@@ -198,14 +200,17 @@ export default function XRayAnalysisScreen({ navigation, route }) {
 
         {/* Confidence Score */}
         <View style={styles.infoCard}>
-          <Text style={styles.infoCardTitle}>Detection Confidence</Text>
+          <Text style={styles.infoCardTitle}>AI Analysis Confidence</Text>
           <View style={styles.confidenceRow}>
-            <Text style={styles.confidencePct}>97.8</Text>
+            <Text style={styles.confidencePct}>{aiData ? Math.round(aiData.confidence * 100) : '--'}</Text>
             <Text style={styles.confidenceUnit}>%</Text>
           </View>
           <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: '97.8%' }]} />
+            <View style={[styles.progressFill, { width: aiData ? `${aiData.confidence * 100}%` : '0%' }]} />
           </View>
+          <Text style={styles.confidenceNote}>
+            {aiData ? 'Analysis complete - confidence based on radiographic clarity' : 'Confidence will be calculated after AI analysis'}
+          </Text>
         </View>
 
         {/* Detected Items */}
@@ -245,29 +250,7 @@ export default function XRayAnalysisScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* ── Gender Selection ── */}
-        <View style={styles.infoCard}>
-          <View style={styles.detectedHeader}>
-            <Text style={styles.infoCardTitle}>Patient Gender</Text>
-            <View style={styles.detectedBadge}>
-              <Text style={styles.detectedBadgeText}>Required</Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: gaps.md, marginTop: spacing.sm }}>
-            <TouchableOpacity 
-              style={[styles.toothTag, gender === 'Male' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-              onPress={() => setGender('Male')}
-            >
-              <Text style={[styles.toothTagText, gender === 'Male' && { color: colors.white }]}>Male</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.toothTag, gender === 'Female' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-              onPress={() => setGender('Female')}
-            >
-              <Text style={[styles.toothTagText, gender === 'Female' && { color: colors.white }]}>Female</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+
 
         {/* ── Action Button ── */}
         <View style={styles.actionArea}>
@@ -474,6 +457,13 @@ const styles = StyleSheet.create({
     borderRadius: scale(3),
     backgroundColor: colors.primary,
   },
+  confidenceNote: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '400',
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
 
   detectedHeader: {
     flexDirection: 'row',
@@ -529,3 +519,6 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: FONT_SIZES.xs, fontWeight: '500', color: colors.textMuted, letterSpacing: 0.3 },
   navLabelActive: { color: colors.primary, fontWeight: '700' },
 });
+
+console.log("GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
+console.log("GEMINI_API_KEY length:", process.env.GEMINI_API_KEY?.length);

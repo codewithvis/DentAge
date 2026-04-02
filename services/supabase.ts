@@ -27,6 +27,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  * Service to sync an offline queue of actions to Supabase.
  * For offline support, users can wrap Supabase calls in a retry logic that stores locally.
  */
+export const enqueueOfflineAction = async (action: any) => {
+    try {
+        const key = `offline_action_${Date.now()}`;
+        await AsyncStorage.setItem(key, JSON.stringify(action));
+    } catch (e) {
+        console.error('Error queuing offline action:', e);
+    }
+};
+
 export const syncOfflineData = async () => {
     // Basic stub for syncing offline data saved in AsyncStorage
     const keys = await AsyncStorage.getAllKeys();
@@ -36,14 +45,101 @@ export const syncOfflineData = async () => {
     for (const key of offlineKeys) {
         try {
             const actionStr = await AsyncStorage.getItem(key);
-            if (actionStr) {
-                const action = JSON.parse(actionStr);
-                // Based on action.type, re-execute the supabase call
-                // Example: 'insert_patient', 'upload_image'
+            if (!actionStr) continue;
+
+            const action = JSON.parse(actionStr);
+            console.log('Processing offline action', key, action.type);
+
+            if (action.type === 'radiograph_upload' || action.type === 'radiograph_upload_and_analyze') {
+                const { base64Data, fileName, fileExt, patient_id = 1 } = action.payload;
+                let blob;
+                if (base64Data) {
+                    // Use stored base64 data from offline queue
+                    const binaryString = atob(base64Data);
+                    const arrayBuffer = new ArrayBuffer(binaryString.length);
+                    const view = new Uint8Array(arrayBuffer);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        view[i] = binaryString.charCodeAt(i);
+                    }
+                    blob = arrayBuffer;
+                } else {
+                    // Old actions stored fileUri instead of base64Data.
+                    // Temp ImagePicker cache files are ephemeral and get cleaned up by the OS,
+                    // so these actions are permanently unrecoverable. Discard them.
+                    console.warn(`Offline sync: discarding unrecoverable action ${key} — no base64Data and temp file no longer exists.`);
+                    await AsyncStorage.removeItem(key);
+                    continue;
+                }
+
+                const { error: uploadError } = await supabase.storage
+                    .from('radiographs')
+                    .upload(fileName, blob, {
+                        contentType: `image/${fileExt}`,
+                    });
+                if (uploadError) {
+                    console.error('Offline upload: supabase storage error', uploadError);
+                    continue;
+                }
+
+                const { data: publicData } = supabase.storage.from('radiographs').getPublicUrl(fileName);
+
+                const { error: insertError } = await supabase.from('radiographs').insert({
+                    patient_id,
+                    image_url: publicData.publicUrl,
+                    uploaded_at: new Date().toISOString(),
+                });
+                if (insertError) {
+                    console.error('Offline upload: insert error', insertError);
+                    continue;
+                }
+
+                // If it's upload_and_analyze, try to analyze now
+                if (action.type === 'radiograph_upload_and_analyze') {
+                    const { base64Data } = action.payload;
+                    try {
+                        const { analyzeOPG } = await import('../api/analyze');
+                        const aiData = await analyzeOPG(base64Data);
+                        console.log("Offline AI Analysis Successful:", aiData);
+                    } catch (aiErr) {
+                        console.error('Offline AI analysis failed', aiErr);
+                        // Don't remove key, keep for later
+                        continue;
+                    }
+                }
+
+                await AsyncStorage.removeItem(key);
+            } else if (action.type === 'saveAnalysis') {
+                const { analysisData } = action.payload;
+                try {
+                    // Get current user for RLS
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) {
+                        console.error('Offline sync: user not authenticated');
+                        continue;
+                    }
+
+                    const analysisWithUser = {
+                        ...analysisData,
+                        user_id: user.id
+                    };
+
+                    const { error: dbError } = await supabase.from('analyses').insert(analysisWithUser);
+                    if (dbError) {
+                        console.error('Offline saveAnalysis insert failed', dbError);
+                        continue;
+                    }
+
+                    await AsyncStorage.removeItem(key);
+                } catch (err) {
+                    console.error('Offline saveAnalysis exception', err);
+                    continue;
+                }
+            } else {
+                console.warn('Unknown offline action type:', action.type);
                 await AsyncStorage.removeItem(key);
             }
         } catch (e) {
             console.error('Error syncing offline data:', e);
         }
     }
-}
+};

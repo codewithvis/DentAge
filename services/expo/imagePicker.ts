@@ -13,7 +13,8 @@ export const openImagePicker = async (): Promise<string | null> => {
     // launchImageLibraryAsync on modern Android because it uses the system Photo Picker securely.
     
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      // ImagePicker.MediaTypeOptions is deprecated; use MediaType instead by passing an array.
+      mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.8,
     });

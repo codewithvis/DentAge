@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {  View,  Text,  TextInput,  TouchableOpacity,  ScrollView,  StyleSheet,
-  SafeAreaView,  StatusBar,  Image,} from 'react-native';
+  StatusBar,  Image,} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing } from '../theme';
 import { supabase } from '../services/supabase';
 import { scale, getResponsiveFontSize, moderateScale } from '../utils/responsive';

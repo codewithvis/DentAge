@@ -1,24 +1,36 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: any = null;
 
 // Wrap in try-catch to prevent crash if notifications module is not fully ready in Expo Go
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-} catch (e) {
-  console.warn('Failed to set notification handler:', e);
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch (e) {
+    console.warn('Failed to set notification handler:', e);
+  }
 }
 
 /**
  * Requests permissions for local notifications.
  */
 export async function requestNotificationPermissions() {
+  if (isExpoGo || !Notifications) {
+    console.warn('Notifications not supported in Expo Go.');
+    return false;
+  }
+  
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -48,6 +60,8 @@ export async function requestNotificationPermissions() {
  * Sends a local notification.
  */
 export async function sendLocalNotification(title: string, body: string) {
+  if (isExpoGo || !Notifications) return;
+  
   try {
     const hasPermission = await requestNotificationPermissions();
     if (hasPermission) {
