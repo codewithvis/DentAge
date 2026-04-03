@@ -167,6 +167,24 @@ serve(async (req: Request) => {
           topP: 0.8,
           maxOutputTokens: 1024,
         },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_NONE"
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_NONE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_NONE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_NONE"
+          }
+        ]
       };
 
       const MODEL = "gemini-1.5-flash";
@@ -194,7 +212,7 @@ serve(async (req: Request) => {
 
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error("Invalid AI response format: no JSON found in Gemini output.");
+        throw new Error(`Invalid AI response format: no JSON found. Raw Gemini output: ${rawText}`);
       }
 
       let parsedAnalysis;
