@@ -244,7 +244,7 @@ serve(async (req: Request) => {
 
         // Upload to Supabase Storage
         const { data: storageData, error: uploadError } = await supabase.storage
-          .from('radiographs')
+          .from('opg-images') // FIXED BUCKET
           .upload(fileName, imageBuffer, {
             contentType: 'image/png',
             upsert: false
@@ -255,32 +255,24 @@ serve(async (req: Request) => {
         }
 
         // Get public URL
-        const { data: publicData } = supabase.storage.from('radiographs').getPublicUrl(fileName);
+        const { data: publicData } = supabase.storage.from('opg-images').getPublicUrl(fileName); // FIXED BUCKET
 
-        // Insert radiograph record
-        const { data: radiographData, error: insertError } = await supabase
-          .from('radiographs')
-          .insert({
-            patient_id: patient_id,
-            image_url: publicData.publicUrl,
-            uploaded_at: new Date().toISOString(),
-            user_id: user.id
-          })
-          .select()
-          .single();
+        // Calculate a basic maturity score
+        const maturityScore = Math.min(100, Math.max(0, (parsedAnalysis.estimated_age / 18) * 100));
 
-        if (insertError) {
-          throw new Error(`Database insert failed: ${insertError.message}`);
-        }
-
-        // Insert analysis record
+        // Insert analysis record directly - removed radiographs insert as table doesn't exist
         const { data: analysisData, error: analysisInsertError } = await supabase
           .from('analyses')
           .insert({
-            patient_id: patient_id,
-            stages: parsedAnalysis.teeth,
-            maturity_score: parsedAnalysis.confidence,
+            case_id: `CASE-${Date.now()}`,
+            patient_id: patient_id === 1 ? null : patient_id, // Defaulted 1 -> null
+            image_url: publicData.publicUrl,
             dental_age: parsedAnalysis.estimated_age,
+            ai_confidence: parsedAnalysis.confidence,
+            maturity_score: Number(maturityScore.toFixed(2)),
+            age_range: parsedAnalysis.age_range,
+            tooth_development_stage: JSON.stringify(parsedAnalysis.teeth),
+            analysis: "Age estimated from Demirjian stages of 7 mandibular left teeth.",
             user_id: user.id
           })
           .select()
@@ -297,7 +289,6 @@ serve(async (req: Request) => {
           success: true,
           message: "Analysis completed successfully",
           data: {
-            radiograph: radiographData,
             analysis: analysisData,
             ai_result: parsedAnalysis
           }
