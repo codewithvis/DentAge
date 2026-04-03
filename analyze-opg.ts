@@ -20,7 +20,7 @@ Return ONLY valid JSON:
   "analysis": "string"
 }`;
 
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-2.5-flash";
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {

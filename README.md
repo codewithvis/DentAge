@@ -7,7 +7,7 @@ A clinical dental age estimation app built with **React Native (Expo)** and **Su
 ## ✨ Features
 
 - 📸 **OPG Radiograph Upload** — Pick or capture dental X-rays from device
-- 🤖 **AI Analysis (Gemini 1.5 Flash)** — Automated Demirjian stage classification for 7 teeth
+- 🤖 **AI Analysis (Gemini 2.5 Flash)** — Automated Demirjian stage classification for 7 teeth
 - 🎯 **Stage Classification** — Interactive tooth-by-tooth review with AI confidence scores
 - 📊 **Results Dashboard** — Estimated dental age, maturity score, age range, and clinical insights
 - 🔐 **Authentication** — Supabase Auth with email/password, password reset via deep linking
