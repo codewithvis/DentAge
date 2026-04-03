@@ -98,8 +98,7 @@ export const syncOfflineData = async () => {
                         const aiData = await analyzeOPG(base64Data, user.id);
                         console.log("Offline AI Analysis Successful:", aiData);
                     } catch (aiErr) {
-                        console.error('Offline AI analysis failed', aiErr);
-                        console.log("CLIENT ERROR FULL:", aiErr);
+                        console.error('Offline AI analysis failed:', aiErr.message || aiErr);
                         // Don't remove key, keep for later
                         continue;
                     }
