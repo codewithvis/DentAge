@@ -16,14 +16,30 @@ export const analyzeOPG = async (imageBase64, userId) => {
     });
 
     if (res.error) {
-      console.log("CLIENT ERROR FULL:", res.error);
-      throw new Error(res.error.message || 'Failed to upload and analyze OPG image');
+      // Extract the actual error body from the Edge Function response
+      let serverError = null;
+      try {
+        // FunctionsHttpError has a .context property with the raw Response
+        if (res.error.context && typeof res.error.context.json === 'function') {
+          serverError = await res.error.context.json();
+        }
+      } catch (_) {}
+
+      console.error("EDGE FUNCTION ERROR:", {
+        message: res.error.message,
+        serverError,
+        status: res.error?.context?.status,
+      });
+
+      const detail = serverError?.error || res.error.message || 'Failed to upload and analyze OPG image';
+      const step = serverError?.step || 'unknown';
+      throw new Error(`[${step}] ${detail}`);
     }
 
     console.log("SERVER RESPONSE:", res.data);
     return res.data;
   } catch (err) {
-    console.log("CLIENT ERROR FULL:", err);
+    console.error("ANALYZE OPG ERROR:", err.message || err);
     throw err;
   }
 };
