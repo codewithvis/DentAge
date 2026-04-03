@@ -31,7 +31,7 @@ export const analyzeOPG = async (imageBase64, userId) => {
         status: res.error?.context?.status,
       });
 
-      const detail = serverError?.error || res.error.message || 'Failed to upload and analyze OPG image';
+      const detail = serverError?.error || serverError?.message || res.error.message || 'Failed to upload and analyze OPG image';
       const step = serverError?.step || 'unknown';
       throw new Error(`[${step}] ${detail}`);
     }
