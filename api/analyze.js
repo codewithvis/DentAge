@@ -8,7 +8,11 @@ import { supabase } from '../services/supabase';
  */
 export const analyzeOPG = async (imageBase64, userId) => {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     const res = await supabase.functions.invoke('radiograph_upload_and_analyze', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: {
         image: imageBase64,
         user_id: userId
