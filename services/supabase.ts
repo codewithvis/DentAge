@@ -19,9 +19,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 // Database tables referenced:
-// - patients: id, name, gender, dob, created_at, user_id
-// - radiographs: id, patient_id, image_url, uploaded_at, user_id
-// - analyses: id, patient_id, stages (JSON), maturity_score, dental_age, user_id
+// - patients: id, name, date_of_birth, notes, created_at, updated_at
+// - analyses: id, case_id, patient_id, image_url, dental_age, ai_confidence, maturity_score, age_range, tooth_development_stage, analysis, created_at, user_id
 
 /**
  * Service to sync an offline queue of actions to Supabase.
@@ -51,7 +50,7 @@ export const syncOfflineData = async () => {
             console.log('Processing offline action', key, action.type);
 
             if (action.type === 'radiograph_upload' || action.type === 'radiograph_upload_and_analyze') {
-                const { base64Data, fileName, fileExt, patient_id = 1 } = action.payload;
+                const { base64Data, fileName, fileExt, patient_id } = action.payload;
                 let blob;
                 if (base64Data) {
                     // Use stored base64 data from offline queue
@@ -72,7 +71,7 @@ export const syncOfflineData = async () => {
                 }
 
                 const { error: uploadError } = await supabase.storage
-                    .from('radiographs')
+                    .from('opg-images')
                     .upload(fileName, blob, {
                         contentType: `image/${fileExt}`,
                         upsert: true,
@@ -82,17 +81,7 @@ export const syncOfflineData = async () => {
                     continue;
                 }
 
-                const { data: publicData } = supabase.storage.from('radiographs').getPublicUrl(fileName);
-
-                const { error: insertError } = await supabase.from('radiographs').insert({
-                    patient_id,
-                    image_url: publicData.publicUrl,
-                    uploaded_at: new Date().toISOString(),
-                });
-                if (insertError) {
-                    console.error('Offline upload: insert error', insertError);
-                    continue;
-                }
+                const { data: publicData } = supabase.storage.from('opg-images').getPublicUrl(fileName);
 
                 // If it's upload_and_analyze, try to analyze now
                 if (action.type === 'radiograph_upload_and_analyze') {
