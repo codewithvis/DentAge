@@ -87,12 +87,19 @@ export default function XRayAnalysisScreen({ navigation, route }) {
 
       // Call Gemini API for analysis
       if (base64Image) {
-        aiData = await analyzeOPG(base64Image);
+        // Get current user for authentication
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('User not authenticated');
+        }
+
+        aiData = await analyzeOPG(base64Image, user.id);
         setAiData(aiData);
         console.log("AI Analysis Successful:", aiData);
       }
 
     } catch (err) {
+      console.log("CLIENT ERROR FULL:", err);
       console.warn('Analysis failed:', err);
       Alert.alert(
         'Analysis Failed',

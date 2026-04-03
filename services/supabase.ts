@@ -98,11 +98,19 @@ export const syncOfflineData = async () => {
                 if (action.type === 'radiograph_upload_and_analyze') {
                     const { base64Data } = action.payload;
                     try {
+                        // Get current user for the function call
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) {
+                            console.error('Offline sync: user not authenticated for analysis');
+                            continue;
+                        }
+
                         const { analyzeOPG } = await import('../api/analyze');
-                        const aiData = await analyzeOPG(base64Data);
+                        const aiData = await analyzeOPG(base64Data, user.id);
                         console.log("Offline AI Analysis Successful:", aiData);
                     } catch (aiErr) {
                         console.error('Offline AI analysis failed', aiErr);
+                        console.log("CLIENT ERROR FULL:", aiErr);
                         // Don't remove key, keep for later
                         continue;
                     }

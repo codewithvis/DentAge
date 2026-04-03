@@ -1,9 +1,21 @@
+export interface ToothData {
+  stage: string;
+  confidence: number;
+}
+
 export interface DentalAgeResult {
   estimated_age: number;
   age_range: string;
   confidence: number;
-  tooth_development_stage: string;
-  analysis: string;
+  teeth: {
+    central_incisor: ToothData;
+    lateral_incisor: ToothData;
+    canine: ToothData;
+    first_premolar: ToothData;
+    second_premolar: ToothData;
+    first_molar: ToothData;
+    second_molar: ToothData;
+  };
 }
 
 export const validateDentalAgeResult = (data: any): DentalAgeResult => {
@@ -18,11 +30,23 @@ export const validateDentalAgeResult = (data: any): DentalAgeResult => {
   if (typeof data.confidence !== "number" || data.confidence < 0 || data.confidence > 1) {
     errors.push("confidence must be a number between 0 and 1");
   }
-  if (typeof data.tooth_development_stage !== "string" || data.tooth_development_stage.trim() === "") {
-    errors.push("tooth_development_stage must be a non-empty string");
-  }
-  if (typeof data.analysis !== "string" || data.analysis.trim() === "") {
-    errors.push("analysis must be a non-empty string");
+  if (!data.teeth || typeof data.teeth !== 'object') {
+    errors.push("teeth must be an object");
+  } else {
+    const requiredTeeth = ['central_incisor', 'lateral_incisor', 'canine', 'first_premolar', 'second_premolar', 'first_molar', 'second_molar'];
+    for (const tooth of requiredTeeth) {
+      if (!data.teeth[tooth] || typeof data.teeth[tooth] !== 'object') {
+        errors.push(`Missing data for tooth: ${tooth}`);
+      } else {
+        const { stage, confidence } = data.teeth[tooth];
+        if (!stage || !['A','B','C','D','E','F','G','H','unknown'].includes(stage)) {
+          errors.push(`Invalid stage for ${tooth}: ${stage}`);
+        }
+        if (typeof confidence !== 'number' || confidence < 0 || confidence > 1) {
+          errors.push(`Invalid confidence for ${tooth}: ${confidence}`);
+        }
+      }
+    }
   }
 
   if (errors.length > 0) {

@@ -9,21 +9,25 @@ const corsHeaders = {
 const GEMINI_SYSTEM_PROMPT = `You are a dental radiology AI specialized in forensic and clinical age estimation using OPG (orthopantomogram) radiographs.
 
 TASK:
-Analyze the provided full OPG image and estimate the patient's dental age based exclusively on observable dental structures.
+Analyze the provided full OPG image and determine the Demirjian development stages for the 7 mandibular left permanent teeth used in age estimation. Then estimate the dental age based on these stages.
 
-ANALYSIS CRITERIA:
-- Tooth development stages (mineralization, root formation, apical closure)
-- Eruption sequence and status (erupted, erupting, unerupted)
-- Third molar (wisdom tooth) development
-- Root resorption patterns (if deciduous teeth are present)
-- Overall dental maturity indicators
+ANALYZE THESE 7 TEETH:
+1. Central incisor (tooth 31)
+2. Lateral incisor (tooth 32)
+3. Canine (tooth 33)
+4. First premolar (tooth 34)
+5. Second premolar (tooth 35)
+6. First molar (tooth 36)
+7. Second molar (tooth 37)
 
 RULES:
+- Use Demirjian stages A through H for each tooth
+- Base stages strictly on observable dental structures in the radiograph
+- Estimate age using standard Demirjian age tables for the stage combination
+- If a tooth is not visible or unclear, use stage "unknown" for that tooth
 - Do NOT assume, infer, or require patient gender
-- Do NOT guess or fabricate data
-- Base ALL reasoning strictly on what is visually evident in the radiograph
-- Use Demirjian classification stages (A through H) where applicable
-- If the image is unclear or not a valid OPG, state this in the analysis field and set confidence to 0.0
+- Do NOT guess or fabricate stages
+- If the image is not a valid OPG, set all stages to "unknown", confidence to 0.0, and estimated_age to 0
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON object — no markdown, no code fences, no commentary outside the JSON:
@@ -31,9 +35,16 @@ Return ONLY a valid JSON object — no markdown, no code fences, no commentary o
 {
   "estimated_age": <number in years>,
   "age_range": "<min>-<max>",
-  "confidence": <float between 0 and 1>,
-  "tooth_development_stage": "<Demirjian stage or descriptive>",
-  "analysis": "<brief technical explanation citing specific dental evidence>"
+  "confidence": <overall confidence 0.0-1.0>,
+  "teeth": {
+    "central_incisor": {"stage": "A-H or unknown", "confidence": 0.0-1.0},
+    "lateral_incisor": {"stage": "A-H or unknown", "confidence": 0.0-1.0},
+    "canine": {"stage": "A-H or unknown", "confidence": 0.0-1.0},
+    "first_premolar": {"stage": "A-H or unknown", "confidence": 0.0-1.0},
+    "second_premolar": {"stage": "A-H or unknown", "confidence": 0.0-1.0},
+    "first_molar": {"stage": "A-H or unknown", "confidence": 0.0-1.0},
+    "second_molar": {"stage": "A-H or unknown", "confidence": 0.0-1.0}
+  }
 }`;
 
 serve(async (req: Request) => {
@@ -42,11 +53,17 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { imageBase64 } = await req.json();
+    const { imageBase64, debug } = await req.json();
+
+    console.log("Incoming request - imageBase64 length:", imageBase64?.length);
 
     if (!imageBase64 || typeof imageBase64 !== "string") {
       throw new Error("A valid base64-encoded image string is required.");
     }
+
+    // Clean base64: remove data:image/... prefix
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    console.log("Cleaned base64 length:", cleanBase64.length);
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
@@ -61,7 +78,7 @@ serve(async (req: Request) => {
             {
               inlineData: {
                 mimeType: "image/png",
-                data: imageBase64,
+                data: cleanBase64,
               },
             },
           ],
@@ -95,15 +112,62 @@ serve(async (req: Request) => {
     }
 
     const data = await response.json();
+    console.log("Gemini response received, candidates:", data?.candidates?.length);
 
     // Extract text from Gemini response structure
-    const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!candidateText) {
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) {
       throw new Error("Gemini API returned no text content in the response.");
     }
 
-    const parsed = JSON.parse(candidateText);
-    // Note: Validation will be done later if needed, but for now return as is
+    // Extract JSON from text
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Invalid AI response format: no JSON found in Gemini output.");
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      throw new Error("Failed to parse JSON from Gemini response.");
+    }
+
+    // Validate structure
+    if (typeof parsed.estimated_age !== "number" || parsed.estimated_age < 0) {
+      throw new Error("Invalid estimated_age in AI response.");
+    }
+    if (typeof parsed.age_range !== "string" || !/^\d+-\d+$/.test(parsed.age_range)) {
+      throw new Error("Invalid age_range in AI response.");
+    }
+    if (!parsed.teeth || typeof parsed.teeth !== 'object') {
+      throw new Error("Missing or invalid teeth data in AI response.");
+    }
+
+    const requiredTeeth = ['central_incisor', 'lateral_incisor', 'canine', 'first_premolar', 'second_premolar', 'first_molar', 'second_molar'];
+    for (const tooth of requiredTeeth) {
+      if (!parsed.teeth[tooth] || typeof parsed.teeth[tooth] !== 'object') {
+        throw new Error(`Missing data for tooth: ${tooth}`);
+      }
+      const { stage, confidence } = parsed.teeth[tooth];
+      if (!stage || !['A','B','C','D','E','F','G','H','unknown'].includes(stage)) {
+        throw new Error(`Invalid stage for ${tooth}: ${stage}`);
+      }
+      if (typeof confidence !== 'number' || confidence < 0 || confidence > 1) {
+        throw new Error(`Invalid confidence for ${tooth}: ${confidence}`);
+      }
+    }
+
+    if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 1) {
+      throw new Error("Invalid overall confidence in AI response.");
+    }
+
+    if (debug) {
+      return new Response(JSON.stringify({ raw_gemini_response: rawText, parsed }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     return new Response(JSON.stringify(parsed), {
       status: 200,
