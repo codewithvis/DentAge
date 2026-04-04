@@ -72,43 +72,36 @@ serve(async (req: Request) => {
     }
 
     // STEP 2 — Validate Authentication
-    // Get user token from custom header or body (since Authorization uses anon key for gateway)
-    const userToken = req.headers.get('x-user-token') || body.user_token;
-    
-    if (!userToken) {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(JSON.stringify({
         step: "auth",
-        error: "Missing user authentication token"
+        error: "Missing authorization header"
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-
-    console.log("STEP 2: User token present, creating Supabase client");
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: `Bearer ${userToken}` } } }
+      { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Validate user token by attempting a simple auth check
-    const { data: { user }, error: userError } = await supabase.auth.getUser(userToken);
-    
-    if (userError || !user) {
-      console.error("User validation failed:", userError);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log("STEP 2: Auth user:", user, authError);
+
+    if (!user || authError) {
       return new Response(JSON.stringify({
         step: "auth",
-        error: "Invalid user token",
-        details: userError?.message
+        error: "User not authenticated",
+        authError
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
-    console.log("STEP 2: User validated:", user.id);
 
     // STEP 3 — Validate Image Processing
     console.log("STEP 3: Image received:", {
@@ -172,7 +165,8 @@ serve(async (req: Request) => {
           temperature: 0.1,
           topK: 1,
           topP: 0.8,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 8192,
+          responseMimeType: "application/json",
         },
         safetySettings: [
           {
@@ -209,17 +203,18 @@ serve(async (req: Request) => {
       }
 
       const geminiData = await geminiResponse.json();
-      console.log("STEP 4: Gemini response received, candidates:", geminiData?.candidates?.length);
+      const finishReason = geminiData?.candidates?.[0]?.finishReason || "UNKNOWN";
+      console.log("STEP 4: Gemini response received, candidates:", geminiData?.candidates?.length, "finishReason:", finishReason);
 
       // Extract and parse Gemini response
       const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!rawText) {
-        throw new Error("Gemini API returned no text content in the response.");
+        throw new Error(`Gemini API returned no text content in the response. FinishReason: ${finishReason}`);
       }
 
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error(`Invalid AI response format: no JSON found. Raw Gemini output: ${rawText}`);
+        throw new Error(`Invalid AI response format: no JSON found. FinishReason: ${finishReason}. Raw Gemini output: ${rawText}`);
       }
 
       let parsedAnalysis;
