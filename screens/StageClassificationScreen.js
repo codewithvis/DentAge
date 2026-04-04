@@ -49,6 +49,7 @@ export default function StageClassificationScreen({ navigation, route }) {
 
   const handleSubmit = async () => {
     setSaving(true);
+    let analysisWithUser = null;
     try {
       // Validation: Ensure AI data is available
       const aiData = route.params?.aiData;
@@ -69,18 +70,18 @@ export default function StageClassificationScreen({ navigation, route }) {
       // Step 3: Prepare data for saving to database
       const analysisData = {
         case_id: `CASE-${Date.now()}`,
-        patient_id: 1, // TODO: Get from patient selection
+        patient_id: null, // Default to null for UUID schema
         image_url: route.params?.imageUri,
         dental_age: aiData.estimated_age,
         ai_confidence: aiData.confidence,
-        maturity_score: Math.min(100, Math.max(0, (aiData.estimated_age / 18) * 100)),
+        maturity_score: Math.min(100, Math.max(0, ((aiData.estimated_age || 0) / 18) * 100)),
         age_range: aiData.age_range,
         tooth_development_stage: aiData.tooth_development_stage,
         analysis: aiData.analysis
       };
 
       // Add user_id to the analysis data for RLS
-      const analysisWithUser = {
+      analysisWithUser = {
         ...analysisData,
         user_id: user.id
       };
