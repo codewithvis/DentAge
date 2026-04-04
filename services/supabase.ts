@@ -100,10 +100,10 @@ export const syncOfflineData = async () => {
                     } catch (aiErr) {
                         console.error('Offline AI analysis failed:', aiErr.message || aiErr);
                         
-                        // If it's an authorization/JWT error, the token is permanently expired or invalid.
+                        // If it's an authorization/JWT error or a 404 not found, it is unrecoverable.
                         // We must discard the task so it doesn't infinitely loop on every startup.
-                        if (aiErr.message?.includes('Invalid JWT') || aiErr.message?.includes('unauthenticated') || aiErr.message?.includes('401')) {
-                            console.warn(`Offline sync: discarding action ${key} due to unrecoverable auth error.`);
+                        if (aiErr.message?.includes('Invalid JWT') || aiErr.message?.includes('unauthenticated') || aiErr.message?.includes('401') || aiErr.message?.includes('404') || aiErr.message?.includes('Not Found')) {
+                            console.warn(`Offline sync: discarding action ${key} due to unrecoverable error (e.g. 401 or 404).`);
                             await AsyncStorage.removeItem(key);
                             continue;
                         }
