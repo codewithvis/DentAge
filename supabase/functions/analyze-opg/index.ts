@@ -88,8 +88,7 @@ serve(async (req: Request) => {
         temperature: 0.1,
         topK: 1,
         topP: 0.8,
-        maxOutputTokens: 8192,
-        responseMimeType: "application/json",
+        maxOutputTokens: 8192
       },
     };
 
