@@ -41,6 +41,16 @@ export const analyzeOPG = async (imageBase64, userId) => {
     }
 
     console.log("SERVER RESPONSE:", serverError);
+    
+    // Map the edge function's nested response into the flattened shape the frontend UI expects
+    if (serverError && serverError.data) {
+        return {
+            ...serverError.data.ai_result,
+            tooth_development_stage: serverError.data.analysis?.tooth_development_stage || JSON.stringify(serverError.data.ai_result?.teeth),
+            analysis: serverError.data.analysis?.analysis || "Analysis completed based on Demirjian stages."
+        };
+    }
+    
     return serverError;
   } catch (err) {
     console.error("ANALYZE OPG ERROR:", err.message || err);
