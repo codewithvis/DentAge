@@ -166,6 +166,7 @@ serve(async (req: Request) => {
           topK: 1,
           topP: 0.8,
           maxOutputTokens: 1024,
+          responseMimeType: "application/json",
         },
         safetySettings: [
           {
@@ -187,7 +188,7 @@ serve(async (req: Request) => {
         ]
       };
 
-      const MODEL = "gemini-2.5-flash";
+      const MODEL = "gemini-1.5-flash";
       const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
       const geminiResponse = await fetch(ENDPOINT, {
