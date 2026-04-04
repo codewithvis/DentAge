@@ -138,8 +138,8 @@ serve(async (req: Request) => {
     if (typeof parsed.estimated_age !== "number" || parsed.estimated_age < 0) {
       throw new Error("Invalid estimated_age in AI response.");
     }
-    if (typeof parsed.age_range !== "string" || !/^\d+-\d+$/.test(parsed.age_range)) {
-      throw new Error("Invalid age_range in AI response.");
+    if (typeof parsed.age_range !== "string" || !/^\d+(\.\d+)?\s*-\s*\d+(\.\d+)?$/.test(parsed.age_range)) {
+      throw new Error(`Invalid age_range in AI response: ${parsed.age_range}`);
     }
     if (!parsed.teeth || typeof parsed.teeth !== 'object') {
       throw new Error("Missing or invalid teeth data in AI response.");
