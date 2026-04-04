@@ -89,6 +89,7 @@ serve(async (req: Request) => {
         topK: 1,
         topP: 0.8,
         maxOutputTokens: 1024,
+        responseMimeType: "application/json",
       },
     };
 
