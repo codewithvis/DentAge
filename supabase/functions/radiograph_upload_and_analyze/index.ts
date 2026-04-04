@@ -72,36 +72,43 @@ serve(async (req: Request) => {
     }
 
     // STEP 2 — Validate Authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Get user token from custom header or body (since Authorization uses anon key for gateway)
+    const userToken = req.headers.get('x-user-token') || body.user_token;
+    
+    if (!userToken) {
       return new Response(JSON.stringify({
         step: "auth",
-        error: "Missing authorization header"
+        error: "Missing user authentication token"
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    console.log("STEP 2: User token present, creating Supabase client");
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: `Bearer ${userToken}` } } }
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log("STEP 2: Auth user:", user, authError);
-
-    if (!user || authError) {
+    // Validate user token by attempting a simple auth check
+    const { data: { user }, error: userError } = await supabase.auth.getUser(userToken);
+    
+    if (userError || !user) {
+      console.error("User validation failed:", userError);
       return new Response(JSON.stringify({
         step: "auth",
-        error: "User not authenticated",
-        authError
+        error: "Invalid user token",
+        details: userError?.message
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+    
+    console.log("STEP 2: User validated:", user.id);
 
     // STEP 3 — Validate Image Processing
     console.log("STEP 3: Image received:", {
@@ -166,7 +173,6 @@ serve(async (req: Request) => {
           topK: 1,
           topP: 0.8,
           maxOutputTokens: 1024,
-          responseMimeType: "application/json",
         },
         safetySettings: [
           {
@@ -188,8 +194,8 @@ serve(async (req: Request) => {
         ]
       };
 
-      const MODEL = "gemini-1.5-flash";
-      const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+      const MODEL = "gemini-exp-1206";
+      const ENDPOINT = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
       const geminiResponse = await fetch(ENDPOINT, {
         method: "POST",

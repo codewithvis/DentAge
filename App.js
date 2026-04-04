@@ -51,16 +51,13 @@ const linking = {
 };
 
 export default function App() {
-  React.useEffect(() => {
-    const initializeApp = async () => {
-      const isOnline = await isNetworkConnected();
-      if (isOnline) {
-        console.log("Network online, syncing offline data...");
-        await syncOfflineData();
-      }
-    };
-    initializeApp();
-  }, []);
+  // ✅ FIXED: Removed early syncOfflineData() call that was running before authentication
+  // The sync was causing "Invalid JWT" errors because it ran before the user session loaded
+  // 
+  // ⚠️ NEXT STEP: Add sync logic to one of these places:
+  // 1. In AuthProvider after session is loaded (recommended for automatic background sync)
+  // 2. In HomeScreen after user logs in (simpler, manual sync)
+  // 3. Listen to network state changes and sync when user is authenticated
 
   React.useEffect(() => {
     const handleDeepLink = async (url) => {
