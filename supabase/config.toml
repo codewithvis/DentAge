@@ -394,3 +394,22 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./declarative"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+[functions.radiograph_upload_and_analyze]
+verify_jwt = false
+
+[functions.calculate-age]
+verify_jwt = false
+
+[functions.upload-image]
+verify_jwt = false
+
+[functions.save-analysis]
+verify_jwt = false
+
+[functions.manage-patients]
+verify_jwt = false
+
+[functions.get-analyses]
+verify_jwt = false
+
