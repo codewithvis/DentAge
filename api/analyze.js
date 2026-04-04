@@ -17,37 +17,31 @@ export const analyzeOPG = async (imageBase64, userId) => {
     
     console.log("Analyzing with token prefix:", token.substring(0, 20));
 
-    const res = await supabase.functions.invoke('radiograph_upload_and_analyze', {
-      headers: { Authorization: `Bearer ${token}` },
-      body: {
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://zmbsnhlvjjaaqyijuzhf.supabase.co';
+    const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+    const resRaw = await fetch(`${supabaseUrl}/functions/v1/radiograph_upload_and_analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
         image: imageBase64,
         user_id: userId
-      },
+      })
     });
 
-    if (res.error) {
-      // Extract the actual error body from the Edge Function response
-      let serverError = null;
-      try {
-        // FunctionsHttpError has a .context property with the raw Response
-        if (res.error.context && typeof res.error.context.json === 'function') {
-          serverError = await res.error.context.json();
-        }
-      } catch (_) {}
-
-      console.error("EDGE FUNCTION ERROR:", {
-        message: res.error.message,
-        serverError,
-        status: res.error?.context?.status,
-      });
-
-      const detail = serverError?.error || serverError?.message || res.error.message || 'Failed to upload and analyze OPG image';
+    const serverError = await resRaw.json().catch(() => null);
+    
+    if (!resRaw.ok) {
+      const detail = serverError?.error || serverError?.message || resRaw.statusText || 'Failed to upload and analyze OPG image';
       const step = serverError?.step || 'unknown';
       throw new Error(`[${step}] ${detail}`);
     }
 
-    console.log("SERVER RESPONSE:", res.data);
-    return res.data;
+    console.log("SERVER RESPONSE:", serverError);
+    return serverError;
   } catch (err) {
     console.error("ANALYZE OPG ERROR:", err.message || err);
     throw err;
