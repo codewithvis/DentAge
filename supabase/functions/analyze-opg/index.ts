@@ -88,7 +88,7 @@ serve(async (req: Request) => {
         temperature: 0.1,
         topK: 1,
         topP: 0.8,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
       },
     };
@@ -113,18 +113,19 @@ serve(async (req: Request) => {
     }
 
     const data = await response.json();
-    console.log("Gemini response received, candidates:", data?.candidates?.length);
+    const finishReason = data?.candidates?.[0]?.finishReason || "UNKNOWN";
+    console.log("Gemini response received, candidates:", data?.candidates?.length, "finishReason:", finishReason);
 
     // Extract text from Gemini response structure
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) {
-      throw new Error("Gemini API returned no text content in the response.");
+      throw new Error(`Gemini API returned no text content in the response. FinishReason: ${finishReason}`);
     }
 
     // Extract JSON from text
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("Invalid AI response format: no JSON found in Gemini output.");
+      throw new Error(`Invalid AI response format: no JSON found in Gemini output. FinishReason: ${finishReason}. Raw output: ${rawText}`);
     }
 
     let parsed;
