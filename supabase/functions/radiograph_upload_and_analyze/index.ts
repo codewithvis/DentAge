@@ -189,7 +189,7 @@ serve(async (req: Request) => {
       };
 
       const MODEL = "gemini-1.5-flash";
-      const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+      const ENDPOINT = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
       const geminiResponse = await fetch(ENDPOINT, {
         method: "POST",
